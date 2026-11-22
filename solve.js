@@ -246,9 +246,15 @@ function headingOf(line) {
   return m === null || m[2] === '' ? null : { depth: m[1].length, text: m[2] };
 }
 
-/** Whether `line` ends a paragraph: blank, fence, heading or thematic break. */
+/** Whether `line` ends a paragraph: blank, fence, heading or thematic break.
+ * First-character guards: every pattern here anchors at the line's start. */
 function endsParagraph(line) {
-  return isBlank(line) || FENCE_OPEN.test(line) || headingOf(line) !== null || HR_RE.test(line);
+  if (isBlank(line)) return true;
+  const c = line.charCodeAt(0);
+  if (c === 96) return FENCE_OPEN.test(line);
+  if (c === 35) return headingOf(line) !== null;
+  if (c === 45 || c === 42) return HR_RE.test(line);
+  return false;
 }
 
 /** A line trimmed of spaces and tabs at both ends. */
@@ -283,13 +289,13 @@ function renderMarkdown(C, src, env) {
       i++;
       continue;
     }
-    const fence = FENCE_OPEN.exec(line);
+    const fence = line.charCodeAt(0) === 96 ? FENCE_OPEN.exec(line) : null;
     if (fence !== null) {
       parts.push('<pre><code');
       if (fence[1] !== '') parts.push(` class="language-${escapeHtml(fence[1])}"`);
       parts.push('>');
       i++;
-      while (i < lines.length && !FENCE_CLOSE.test(lines[i])) {
+      while (i < lines.length && !(lines[i].charCodeAt(0) === 96 && FENCE_CLOSE.test(lines[i]))) {
         parts.push(escapeHtml(lines[i]), '\n');
         i++;
       }
@@ -297,7 +303,7 @@ function renderMarkdown(C, src, env) {
       parts.push('</code></pre>\n');
       continue;
     }
-    const heading = headingOf(line);
+    const heading = line.charCodeAt(0) === 35 ? headingOf(line) : null;
     if (heading !== null) {
       const id = uniqueSlug(slugify(C, heading.text), ids);
       const html = inline(C, heading.text, env, 0, heading.text.length);
@@ -306,7 +312,8 @@ function renderMarkdown(C, src, env) {
       i++;
       continue;
     }
-    if (HR_RE.test(line)) {
+    const hc = line.charCodeAt(0);
+    if ((hc === 45 || hc === 42) && HR_RE.test(line)) {
       parts.push('<hr>\n');
       i++;
       continue;
@@ -361,7 +368,7 @@ function renderMarkdown(C, src, env) {
         if (m !== null) {
           items.push([trimLine(m)]);
           i++;
-        } else if (CONTINUED.test(l)) {
+        } else if (l.charCodeAt(0) === 32 && l.charCodeAt(1) === 32 && CONTINUED.test(l)) {
           // Two or more spaces then a non-space continues the item.
           items[items.length - 1].push(trimLine(l));
           i++;
